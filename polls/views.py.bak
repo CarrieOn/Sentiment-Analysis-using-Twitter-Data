@@ -1,0 +1,114 @@
+from django.http import HttpResponse
+from django.http import HttpRequest
+from django.shortcuts import render
+from django.template import loader
+from django.shortcuts import render_to_response
+from django.urls import reverse
+from django.http import JsonResponse
+
+import json
+import urllib.request 
+from urllib.parse import quote
+
+import os
+from mysite.settings import BASE_DIR
+
+from django.views.decorators.csrf import csrf_exempt
+
+query = "trump"
+language = "en"
+
+@csrf_exempt
+def index(request):
+	global query
+	query = request.POST.get('query')
+	if query is not None:
+		print("ok")
+		inurl = "http://54.80.164.212:8983/solr/Project4/select?q=full_text%3A{q}&wt=json&rows=500".format(q = query)
+
+		data = urllib.request.urlopen(inurl)
+		docs = json.load(data)['response']['docs']
+		# with open('tmp.txt', 'w') as outfile:
+		# 	json.dump(docs, outfile)
+		print("find # docs:")
+		print(len(docs))
+
+		followers = docs[0]["user.followers_count"][0]
+		favourites = docs[0]["user.favourites_count"][0]
+		friends = docs[0]["user.friends_count"][0]
+		listed = docs[0]["user.listed_count"][0] #retweeted
+		# statuses = docs[0]["user.statuses_count"][0] #retweets
+
+		total1 = followers + friends
+		total2 = favourites + listed
+
+		pp = {
+			"favourites_num": str(favourites),
+			"favourites_ratio": str(100 - int(listed/total2 * 100)) + "%",
+
+			"listed_num": str(listed),
+			"listed_ration": str(int(listed/total2 * 100)) + "%",
+
+			"friends_num": str(friends),
+			"friends_ratio": str(100 - int(followers/total1 * 100)) + "%",
+
+			"followers_num": str(followers),
+			"followers_ratio": str(int(followers/total1 * 100)) + "%"
+		}
+
+
+		# cuibo python process
+		temp = {}
+		for i in docs:
+			if i["tweet_date"][0][0:7] in temp.keys():
+				temp[i["tweet_date"][0][0:7]] += 1
+			else :
+				temp[i["tweet_date"][0][0:7]] = 1
+
+
+		date = sorted(temp.keys())
+		amount = []
+		for i in date :
+			amount.append(temp[i])
+
+
+		display = []
+		count = 0
+		for i in docs:
+			single = {}
+			single["profile"] = i["user.profile_image_url"]
+			single["screen_name"] = i["user.screen_name"] # screen name is used for creating original link
+			single["name"] = i ["user.name"]
+			single["fullText"] = i["full_text"]
+			single["date"] = i["tweet_date"][0][0:7]
+			single["twitterId"] = i ['id']
+			display.append(single)
+			count +=1
+			if count >= 8:
+				break
+
+		cb = {}
+		cb["date"] = date
+		cb["amount"] = amount
+		cb["display"] = display
+
+		dict = {
+		"pp" : pp,
+		"cb" : cb
+		}
+
+		# print(dict['favourites_ratio'])
+		# print(dict['listed_ration'])
+		print(cb)
+
+		return HttpResponse(json.dumps({"status": 1, "result": dict}))
+
+
+	else:
+		print("not ok")
+		return render(request, "index.html")
+
+
+def tmp(request):
+	global language
+	return render(request, "index.html", {'width': "width: 90%"})
